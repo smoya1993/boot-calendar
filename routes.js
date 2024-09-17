@@ -1,4 +1,5 @@
 const express = require('express')
+const axios = require('axios');
 const router = express.Router()
 const { MessagingResponse } = require('twilio').twiml;
 const responses = require("./responses")
@@ -286,99 +287,46 @@ const footer = `
 
 /////////////// Display Messages Ends ///////////////////
 
-router.post('/', function(req, res, next) {
+router.post('/', async function(req, res, next) {
     const twiml = new MessagingResponse();
-    let result = null
-    const q = req.body.Body;
-    let voter = req.body.From.split(":")[1]
-    currentUser = voter;
-    try {
-        if(state.length !== 0 && state.find(e => e.user == currentUser && e.key) ){
-        
-          switch(state.find(e => e.user == currentUser && e.key).key){
-            case 1:
-                if(Number(q) === 0){
-                    state = removeInState(state,1,currentUser)
-                    result =  responses.cancelVote
-                }else{
-                    result =  castVote(voter,Number(q));
-                }
-                break;
-            case 4:
-                if(Number(q) === 0){
-                    state = removeInState(state,4,currentUser)
-                    result =  responses.cancelAddCandidates
-                }else{
-                    result = addCandidate(q);
-                }
-                break;
-           case 5:
-                if(Number(q) === 0){
-                    state = removeInState(state,5,currentUser)
-                    result =  responses.cancelDeleteCandidate
-                }else{
-                    result = deleteCandidate(voter,Number(q));
-                }
-               break;
-           case 6:
-                if(Number(q) === 1){
-                    result =  clearCandidates()
-                }else{
-                    result = responses.cancelDeleteCandidates;
-                    state = removeInState(state,6,currentUser)
-                }
-                break;
-            case 7:
-                if(Number(q) === 1){
-                    result =  clearVotes()
-                }else{
-                    result = responses.cancelDeleteVotes;
-                    state = removeInState(state,7,currentUser)
-                }
-                break;
-            default:
-                result = showHelp()
-                break;
-        }
-    }else{
-        switch(Number(q)){
-            case 1:
-            result = castVote(voter)
-            break;
-            case 2:
-            result = showCandidates()
-            break;
-            case 3:
-            result = showResult()
-            break;
-            case 4:
-            result = addCandidate()
-            break;
-            case 5:
-            result = deleteCandidate(voter)
-            break;
-            case 6:
-            result = clearCandidates()
-            break;
-            case 7:
-            result = clearVotes()
-            break;
-            case 8:
-            result = showHelp()
-            break;
-            default:
-            result = showDefaultMessage()
-                
-        }    
-        
-    }
-    twiml.message(result+'\n'+footer);
-    return res.status(200).send(twiml.toString())
+    const body = req.body.Body; // El mensaje de WhatsApp
+    const from = req.body.From; // Número del remitente (teléfono)
     
-} catch (error) {
-      return next(error);
+    try {
+        // Llama a la función que hace la solicitud al webhook
+        const webhookResponse = await sendEventToWebhook(from, body); // Captura la respuesta del webhook
+        
+        // Accede al campo 'content' dentro de 'messages' en la respuesta
+        const content = webhookResponse.messages?.[0]?.content || "No content available";
+
+        console.log('Respuesta del webhook:', content); // Muestra el contenido recibido en el webhook
+
+        // Utiliza el 'content' de la respuesta para enviar un mensaje al usuario
+        twiml.message(`Evento procesado correctamente. Detalles: ${content}`);
+        return res.status(200).send(twiml.toString());
+
+    } catch (error) {
+        return next(error);
     }
-      
 });
+
+
+
+// Función para enviar datos al webhook externo
+const sendEventToWebhook = async (from, body) => {
+    try {
+        const response = await axios.post('https://n8n-xw9f.onrender.com/webhook-test/add-event-to-calendar', {
+            ctx: {
+                from: from,  // Número del remitente
+                body: body   // Mensaje del cuerpo
+            }
+        });
+        console.log('Webhook called successfully', response.data);
+        return response.data; // Puedes retornar los datos de la respuesta si es necesario
+    } catch (err) {
+        console.error('Error llamando al webhook', err);
+        throw new Error('Error procesando el evento');
+    }
+};
 
 module.exports = router;
