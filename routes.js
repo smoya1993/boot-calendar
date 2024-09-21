@@ -315,7 +315,7 @@ router.post('/', async function(req, res, next) {
 // Función para enviar datos al webhook externo
 const sendEventToWebhook = async (from, body) => {
     try {
-        const response = await axios.post('https://n8n-xw9f.onrender.com/webhook-test/add-event-to-calendar', {
+        const response = await axios.post('https://n8n-xw9f.onrender.com/webhook/add-event-to-calendar', {
             ctx: {
                 from: from,  // Número del remitente
                 body: body   // Mensaje del cuerpo
