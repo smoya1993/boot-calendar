@@ -1,9 +1,9 @@
 const express = require('express')
-const axios = require('axios');
 const router = express.Router()
 const { MessagingResponse } = require('twilio').twiml;
 const responses = require("./responses")
 const { checkValid, findInState,groupBy,removeInState} = require("./utility")
+const { sendEventToWebhook } = require('./webhookClient')
 
 let state = []
 let currentUser = null;
@@ -306,27 +306,14 @@ router.post('/', async function(req, res, next) {
         return res.status(200).send(twiml.toString());
 
     } catch (error) {
-        return next(error);
+        // Importante: Twilio espera una respuesta rápida (TwiML). Si n8n falla o tarda, respondemos igual.
+        // eslint-disable-next-line no-console
+        console.error('Error procesando webhook n8n:', error?.message || error);
+        twiml.message('Recibido ✅ (no pude procesarlo ahora mismo). Inténtalo de nuevo en unos segundos.');
+        return res.status(200).send(twiml.toString());
     }
 });
 
 
-
-// Función para enviar datos al webhook externo
-const sendEventToWebhook = async (from, body) => {
-    try {
-        const response = await axios.post('https://n8n-xw9f.onrender.com/webhook-test/add-event-to-calendar', {
-            ctx: {
-                from: from,  // Número del remitente
-                body: body   // Mensaje del cuerpo
-            }
-        });
-        console.log('Webhook called successfully', response.data);
-        return response.data; // Puedes retornar los datos de la respuesta si es necesario
-    } catch (err) {
-        console.error('Error llamando al webhook', err);
-        throw new Error('Error procesando el evento');
-    }
-};
 
 module.exports = router;

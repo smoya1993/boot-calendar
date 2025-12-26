@@ -54,6 +54,72 @@ $ npm install
 $ node index.js
 ```
 
+## Deploy en Linux (PM2)
+
+### 1) Preparar servidor
+
+- Instala Node.js (recomendado Node 18+ o 20+), npm, y git.
+- Abre el puerto público solo si NO vas a usar Nginx (recomendado usar Nginx y dejar la app en localhost).
+
+### 2) Subir el proyecto
+
+```bash
+git clone <tu-repo>
+cd boot-calendar
+npm ci --omit=dev
+cp env.example .env
+```
+
+Edita `.env` con tus valores (tokens/URLs). Nota: en este repo `env.example` es el “.env.example”.
+
+### 3) Instalar PM2 y arrancar
+
+```bash
+sudo npm i -g pm2
+pm2 start ecosystem.config.js
+pm2 status
+pm2 logs boot-calendar
+```
+
+### 4) Auto-arranque al reiniciar
+
+```bash
+pm2 save
+pm2 startup
+```
+
+PM2 te imprimirá un comando `sudo ...` — ejecútalo.
+
+### 5) (Recomendado) Nginx + HTTPS (webhooks)
+
+Si Twilio/Telegram van a llamar a tu API, necesitas una URL pública con HTTPS.
+
+Ejemplo de server block (ajusta dominio y SSL):
+
+```nginx
+server {
+  server_name tu-dominio.com;
+
+  location / {
+    proxy_pass http://127.0.0.1:4000;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}
+```
+
+Luego saca certificado con Certbot:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y nginx certbot python3-certbot-nginx
+sudo certbot --nginx -d tu-dominio.com
+```
+
+
 ## Credits
 
 This application uses the following open source packages:
