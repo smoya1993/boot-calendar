@@ -1,74 +1,52 @@
-let responses = {
-    duplicate_vote : (from) => `😕 ${from} you are not allowed to vote more than once!`,
-    valid_vote : (from) => ` Thank you, ${from}, your vote has been taken ✔️`,
-    chooseValidCandidate: (from) => `😕 ${from}, please choose a valid candidate`,
-    no_candidate:  '😕 There are no candidates now',
-    no_candidate_supplied: '😕 No candidate supplied, please supply at least one',
-    no_votes: '😕 No votes cast so far',
-    added_candidates: ' 👍  Candidate(s) have been added',
-    deleted_candidate: ' 👍 Candidate has been removed',
-    deleted_candidates: ' 👍 All Candidates have been removed',
-    deleted_votes: ' 👍 All Votes have been removed',
-    not_allowed: ' 👿 👎 You are not authorized to perform this action!',
-    draw: '😇 We currently have a draw!',
-    list_of_candidate: (showCandidates) => {
-        let respo = showCandidates()
-        respo+= `\n 0 - Cancel`
-        return respo
-    },
-    confirm_add_of_candidates: () => {
-        let respo = `
-        Are you sure you want to add more candidates, if yes?
+const responses = {
+  menu: () => `
+🍳 Chef-Boot (Recetas)
 
-        Provide a value of comma seperated candidates
-        
-        E.g candidate1,candidate2,candidate3
-        
-        \n 0 - Cancel`
-        
-        return respo
-    },
-    confirm_delete_of_candidate: (showCandidates) => {
-        let respo = `
-        Are you sure you want to remove a candidate, 
-        this would also remove their votes so far, if yes?
+1 - Listar recetas
+2 - Ver receta (por ID)
+3 - Crear receta
+4 - Editar receta
+5 - Borrar receta
+6 - Buscar receta
 
-        `
+0 - Cancelar / Menú
+9 - Ayuda
+`.trim(),
 
-        respo += showCandidates()
-        respo+= `\n 0 - Cancel`
-        return respo
+  help: () => `
+Ayuda (Recetas)
 
-    },
-    confirm_delete_of_candidates:  () => {
-        let respo = `
-        Are you sure you want to remove all candidates?
+1) Listar: muestra recetas (si n8n devuelve un array, se formatea en lista)
+2) Ver: te pedirá un ID
+3) Crear: asistente por pasos (título, descripción, tiempo, ingredientes, pasos)
+4) Editar: ID + campo a editar
+5) Borrar: ID + confirmación
+6) Buscar: texto (título/ingredientes, lo que implemente n8n)
 
-        1 - to continue
-        
-        \n Any key - Cancel`
-        
-        return respo
-    },
-    confirm_delete_of_votes:  () => {
-        let respo = `
-        Are you sure you want to remove all votes so far?
+Tip: en ingredientes usa coma (,) y en pasos usa | (barra vertical) o saltos de línea.
+`.trim(),
 
-        1 - to continue
-        
-        \n Any key - Cancel`
-        
-        return respo
-    },
-    cancelVote: '👍 Voting has been cancelled',
-    cancelAddCandidates: '👍 Addition of Candidate(s) has been cancelled',
-    cancelDeleteCandidate:  '👍 Deletion of Candidate has been cancelled',
-    cancelDeleteCandidates:  '👍 Deletion of Candidates has been cancelled',
-    cancelDeleteVotes: '👍 Deletion of Votes has been cancelled',
-    showResult: (res) => {
-        return res.candidate.map(e => 
-            `${e.name} - ${e.percentage}% of votes cast - ${e.total} votes accumulated`
-        ).join('\n')
-    }
-}
- module.exports  = responses
+  unknown: () => `No te entiendo. Responde con un número del menú.\n\n${responses.menu()}`,
+
+  askIdToView: () => 'Escribe el ID de la receta que quieres ver (0 para volver al menú).',
+  askQuery: () => 'Escribe el texto a buscar (0 para volver al menú).',
+
+  createTitle: () => 'Crear receta: dime el *título* (0 para cancelar).',
+  createDescription: () => 'Crear receta: dime una *descripción* corta (0 para cancelar).',
+  createCookingTime: () => 'Crear receta: tiempo de preparación (ej: 15 min) (0 para cancelar).',
+  createIngredients: () => 'Crear receta: ingredientes separados por coma. Ej: huevo, leche, sal (0 para cancelar).',
+  createInstructions: () => 'Crear receta: pasos separados por | o por líneas. Ej: mezclar | hornear (0 para cancelar).',
+
+  editAskId: () => 'Editar receta: escribe el ID (0 para cancelar).',
+  editAskField: () => `¿Qué quieres editar?\n1 - Título\n2 - Descripción\n3 - Tiempo\n4 - Ingredientes\n5 - Pasos\n6 - Imagen\n0 - Cancelar`,
+  editAskValue: (fieldLabel) => `Nuevo valor para *${fieldLabel}* (0 para cancelar).`,
+
+  deleteAskId: () => 'Borrar receta: escribe el ID (0 para cancelar).',
+  deleteConfirm: (id) => `¿Seguro que quieres borrar la receta ${id}?\n1 - Sí\n0 - No (cancelar)`,
+
+  cancelled: () => `Cancelado.\n\n${responses.menu()}`,
+
+  n8nError: () => 'Recibido ✅ (no pude procesarlo ahora mismo). Inténtalo de nuevo en unos segundos.',
+};
+
+module.exports = responses;

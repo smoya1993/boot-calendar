@@ -1,11 +1,9 @@
 <h1 align="center">
   <br>
-  <a href="https://youtu.be/xls_7abY27I"><img src="https://github.com/chyke007/e-voting/raw/master/preview.png" alt="Youtube Demo" title="Youtube Demo" width="600"></a>
-  <br>
-  E-Voter
+  Chef-Boot (Recetas)
   <br>
 </h1>
-<h4 align="center">E-Voter, is a WhatsApp chatbot voting application using NodeJs and Twilio .</h4>
+<h4 align="center">Bot de WhatsApp (Twilio) para crear, ver, editar, borrar y buscar recetas, delegando el CRUD a n8n.</h4>
 
 <p align="center">
   <a href="#key-features">Key Features</a> •
@@ -17,42 +15,74 @@
 
 ## Key Features
 
-- Vote
-  - Vote for a candidate.
-  - See List of candidates
-  - See a comprehensive result from votes cast
-- Security
-  - Prevents a user from voting multiple times
-  - Restricts admin functionality to only an admin
-- Dynamic
-  - Admin can add and delete candidate
-  - Admin can delete votes
-  - Admin can delete all candidates and votes to restart the voting
-- Scalable
-  - Allows unlimited number of candidates
-  - Allows unlimited number of votes
-  - Allows simultaneous voting
+- Recetas (menú numérico)
+  - Listar recetas
+  - Ver receta por ID
+  - Buscar recetas
+  - Crear receta (asistente por pasos)
+  - Editar receta (por campo)
+  - Borrar receta
+- Integración con n8n
+  - El backend llama a un único webhook y n8n implementa el almacenamiento/CRUD
 
 ## How To Use
 
-To clone and run this application, you'll need [Git](https://git-scm.com) and [Node.js](https://nodejs.org/en/download/) v15+ (which comes with [npm](http://npmjs.com)) installed on your computer. You would need to setup a Twilio account, then go to sandbox and add the url of this api as your webhook. Also add required credentials to the .env file created from the command below.From your command line:
+Necesitas [Git](https://git-scm.com) y [Node.js](https://nodejs.org/en/download/) (v18+ recomendado) con npm. Además, necesitas Twilio (WhatsApp) y un workflow de n8n expuesto vía webhook (production).
 
 ```bash
-# Clone this repository
-$ git clone https://github.com/chyke007/e-voting.git
-
-# Go into the repository
-$ cd e-voting
-
-# Copy environment variable
-$ cp .env.example .env
-
-# Install dependencies
-$ npm install
-
-# Run the app
-$ node index.js
+git clone <tu-repo>
+cd boot-calendar
+npm install
+npm start
 ```
+
+## Variables de entorno
+
+- `PORT`: puerto del server (default `4000`)
+- `N8N_WEBHOOK_URL`: webhook de n8n (production). Default: `http://127.0.0.1:5678/webhook/recipes`
+- `N8N_TIMEOUT_MS`: timeout para n8n (default `4000`)
+
+## Menú del bot (WhatsApp)
+
+- `1` Listar recetas
+- `2` Ver receta (ID)
+- `3` Crear receta (wizard)
+- `4` Editar receta
+- `5` Borrar receta
+- `6` Buscar receta
+- `0` Cancelar / menú
+- `9` Ayuda
+
+## Contrato con n8n (webhook único)
+
+El backend hace `POST` a `N8N_WEBHOOK_URL` con:
+
+```json
+{
+  "ctx": {
+    "from": "whatsapp:+34111111111",
+    "body": "texto original",
+    "action": "list|get|search|create|update|delete",
+    "payload": {}
+  }
+}
+```
+
+Ejemplos de `payload`:
+- `list`: `{ "page": 1 }`
+- `get`: `{ "id": "12" }`
+- `search`: `{ "query": "barbacoa" }`
+- `create`: `{ "recipe": { "title": "...", "description": "...", "cookingTime": "...", "ingredients": [...], "instructions": [...] } }`
+- `update`: `{ "id": "12", "patch": { "title": "Nuevo título" } }`
+- `delete`: `{ "id": "12" }`
+
+Respuesta recomendada de n8n (rápida, HTTP 200):
+
+```json
+{ "messages": [ { "content": "Texto para WhatsApp" } ] }
+```
+
+También se soportan respuestas tipo “receta” (objeto) o arrays de recetas: el backend las formatea a texto.
 
 ## Deploy en Linux (PM2)
 
@@ -127,6 +157,7 @@ This application uses the following open source packages:
 - [Twilio](https://twilio.com/)
 - [Node.js](https://nodejs.org/)
 - [ExpressJs](https://expressjs.com/)
+- [n8n](https://n8n.io/)
 
 ## Support
 

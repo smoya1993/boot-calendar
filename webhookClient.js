@@ -1,18 +1,20 @@
 const axios = require('axios');
 
 /**
- * Envía el mensaje entrante a un webhook externo (n8n) para procesarlo.
- * Espera una respuesta con estructura tipo: { messages: [{ content: "..." }, ...] }
+ * Llama a n8n con un contrato estable (action/payload).
+ * n8n debería responder rápido (idealmente < N8N_TIMEOUT_MS) y devolver:
+ * - Preferido: { messages: [{ content: "texto" | {..receta..} }] }
+ * - Alternativo: arrays/objetos de recetas
  */
-async function sendEventToWebhook(from, body) {
-  // Por defecto apuntamos al n8n local del servidor.
+async function callN8n(action, payload, from, body) {
+  // Por defecto apuntamos al webhook "production" de recetas.
   // Si quieres otro n8n, define N8N_WEBHOOK_URL en el .env
-  const url = process.env.N8N_WEBHOOK_URL || 'http://127.0.0.1:5678/webhook-test/add-recipe';
+  const url = process.env.N8N_WEBHOOK_URL || 'http://127.0.0.1:5678/webhook/recipes';
 
   const response = await axios.post(
     url,
     {
-      ctx: { from, body },
+      ctx: { from, body, action, payload },
     },
     {
       // Importante para webhooks (Twilio/Telegram): no colgar el request indefinidamente
@@ -33,6 +35,11 @@ async function sendEventToWebhook(from, body) {
   return response.data;
 }
 
-module.exports = { sendEventToWebhook };
+// Compat: nombre antiguo (antes se llamaba sendEventToWebhook y solo mandaba from/body)
+async function sendEventToWebhook(from, body) {
+  return callN8n('message', { text: body }, from, body);
+}
+
+module.exports = { callN8n, sendEventToWebhook };
 
 

@@ -1,319 +1,242 @@
-const express = require('express')
-const router = express.Router()
+const express = require('express');
+const router = express.Router();
 const { MessagingResponse } = require('twilio').twiml;
-const responses = require("./responses")
-const { checkValid, findInState,groupBy,removeInState} = require("./utility")
-const { sendEventToWebhook } = require('./webhookClient')
 
-let state = []
-let currentUser = null;
-let votes =  [
-    {candidate: 1, user: "+23400000000"},
-    {candidate: 2, user: "+234494002233"},
-    {candidate: 1, user: "+234224940033"},
-    {candidate: 2, user: "+234494003003"},
-    {candidate: 2, user: "+234494002203"},
+const responses = require('./responses');
+const { callN8n } = require('./webhookClient');
+const { normalizeWebhookContent } = require('./recipeFormatters');
 
-]
+// Estado conversacional en memoria (por usuario). Para HA, migrar a Redis.
+const userState = new Map();
 
-let candidates = [
-    {
-        id: 1, name:"Donald Trump and Mike Pence"
-    },
-    {
-        id: 2, name:"Joe Biden and Kamala Harris"
+const Steps = {
+  MAIN: 'MAIN',
+  VIEW_ID: 'VIEW_ID',
+  SEARCH_QUERY: 'SEARCH_QUERY',
+  CREATE_TITLE: 'CREATE_TITLE',
+  CREATE_DESC: 'CREATE_DESC',
+  CREATE_TIME: 'CREATE_TIME',
+  CREATE_ING: 'CREATE_ING',
+  CREATE_INS: 'CREATE_INS',
+  EDIT_ID: 'EDIT_ID',
+  EDIT_FIELD: 'EDIT_FIELD',
+  EDIT_VALUE: 'EDIT_VALUE',
+  DELETE_ID: 'DELETE_ID',
+  DELETE_CONFIRM: 'DELETE_CONFIRM',
+};
+
+function getOrInitUser(from) {
+  if (!userState.has(from)) userState.set(from, { step: Steps.MAIN, data: {} });
+  return userState.get(from);
+}
+
+function resetUser(from) {
+  userState.set(from, { step: Steps.MAIN, data: {} });
+}
+
+function parseList(input) {
+  return String(input)
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function parseSteps(input) {
+  const raw = String(input).trim();
+  if (!raw) return [];
+  // Soporta "|" o líneas
+  const parts = raw.includes('|') ? raw.split('|') : raw.split('\n');
+  return parts.map((s) => s.trim()).filter(Boolean);
+}
+
+function safeText(x) {
+  return String(x || '').trim();
+}
+
+async function handleMain(from, bodyText) {
+  switch (bodyText) {
+    case '1': {
+      const data = await callN8n('list', { page: 1 }, from, bodyText);
+      const content = normalizeWebhookContent(data) || 'No hay recetas.';
+      // Después de listar, permitimos que el usuario ponga un ID directamente
+      userState.set(from, { step: Steps.VIEW_ID, data: {} });
+      return `${content}\n\n${responses.askIdToView()}`;
     }
-]
-
-
-//////////////////// Candidate Section ////////////////////
-
-/**
- * Adds more candidates to the candidates pool (ADMIN only)
- * @param {String} [val] - Candidates to be added
- * @return {String} Response message
- */
-const addCandidate = (val) => {
-    
-    if(String(process.env.ADMIN) !== String(currentUser)) return responses.not_allowed
-    if(findInState(state,4, currentUser)){
-        if(String(val).length === 0) return responses.no_candidate_supplied
-        let pivot = candidates.length === 0 ? 1 : Number(candidates[candidates.length-1].id) + 1;
-        let newCand = String(val).split(',').map((e,i) => {
-            return {id: pivot + i, name: e}
-        })
-        state = removeInState(state,4,currentUser)
-        candidates = [...candidates,...newCand]
-        return responses.added_candidates 
-     }else{
-         state.push({key:4, user:currentUser})
-         return responses.confirm_add_of_candidates()
+    case '2': {
+      userState.set(from, { step: Steps.VIEW_ID, data: {} });
+      return responses.askIdToView();
     }
-
-}
-
-/* Used to delete a specific candidate - (ADMIN only)
- * @param {String} from - Voters identity
- * @param {Number} [val] - Candidate id
- * @return {String} Response message
- */
-const deleteCandidate = (from,val) => {
-
-    if(String(process.env.ADMIN) !== String(currentUser)) return responses.not_allowed
-    if(candidates.length === 0) return responses.no_candidate    
-    
-    if(findInState(state,5, currentUser)){
-            //Checks if candidate supplied by admin is a valid candidate
-            if (!checkValid(candidates,val,'id')){
-                return responses.chooseValidCandidate(from) + '\n' +responses.list_of_candidate(showCandidates)
-            }
-            state = removeInState(state,5,currentUser)
-            candidates = candidates.filter(e => e.id !== val)
-            votes = votes.filter(e => e.candidate !== val)
-            return responses.deleted_candidate 
-    }else{
-            state.push({key:5, user: currentUser})
-            return responses.confirm_delete_of_candidate(showCandidates)
-   }
-    
-}
-/**
- * Shows all available candidates
- * @return {String} Response message
- */
-const showCandidates = () => {
-    if(candidates.length === 0) return responses.no_candidate
-    return `
-    List of Candidates:
-    \n`
-    +candidates.map((e,i) => {
-        return `\n ${e.id} - ${e.name}`
-    })
-}
-
-/**
- * Deletes all available candidates - (ADMIN only)
- * @return {String} Response message
- */
-const clearCandidates = () => {
-    if(String(process.env.ADMIN) !== String(currentUser)) return responses.not_allowed
-
-    if(candidates.length === 0) return responses.no_candidate
-
-    if(findInState(state,6, currentUser)){
-        candidates = []
-        state = removeInState(state,6,currentUser)
-        return responses.deleted_candidates 
-     }else{
-         state.push({key:6 , user: currentUser})
-         return responses.confirm_delete_of_candidates()
+    case '3': {
+      userState.set(from, { step: Steps.CREATE_TITLE, data: {} });
+      return responses.createTitle();
     }
-
+    case '4': {
+      userState.set(from, { step: Steps.EDIT_ID, data: {} });
+      return responses.editAskId();
+    }
+    case '5': {
+      userState.set(from, { step: Steps.DELETE_ID, data: {} });
+      return responses.deleteAskId();
+    }
+    case '6': {
+      userState.set(from, { step: Steps.SEARCH_QUERY, data: {} });
+      return responses.askQuery();
+    }
+    case '9': {
+      return responses.help();
+    }
+    default:
+      return responses.unknown();
+  }
 }
 
-/////////////////// Candidate Section Ends /////////////////////
+async function handleStep(from, text) {
+  const st = getOrInitUser(from);
+  const t = safeText(text);
 
+  // Global cancel
+  if (t === '0') {
+    resetUser(from);
+    return responses.cancelled();
+  }
+  // Global help
+  if (t === '9') {
+    return responses.help();
+  }
 
-//////////////// Vote Section  /////////////////////////
+  switch (st.step) {
+    case Steps.MAIN:
+      return handleMain(from, t);
 
-
-/**
- * Adds a users vote
- * @param {String} from - Voters identity
- * @param {Number} val - Candidate Identity
- * @return {String} Response message
- */
-
-const addVote = (from,val) => {
-    //Checks if candidate supplied by voter is a valid candidate
-    if (!checkValid(candidates,val,'id'))
-        return responses.chooseValidCandidate(from) + '\n' +responses.list_of_candidate(showCandidates)
-
-    votes.push({ candidate: val, user: from})
-    state = removeInState(state,1,currentUser)
-    return responses.valid_vote(from)
-}
-
-
-/**
- * Used to cast users vote
- * @param {String} from - Voters identity
- * @param {Number} [val] - Candidate id
- * @return {String} Response message
- */
-const castVote = (from,val) => { 
-    //Checks if user has already casted vote
-    if (checkValid(votes,from,'user')) return responses.duplicate_vote(from)
-    if(findInState(state,1, currentUser)){
-       if(candidates.length === 0) return responses.no_candidate;
-       return addVote(from,val)
-    }else{
-
-        if(candidates.length === 0) return responses.no_candidate;
-        state.push({key: 1, user: currentUser})
-        return responses.list_of_candidate(showCandidates)
-   }
-}
-
-
-/**
- * Deletes all available votes - (ADMIN only)
- * @return {String} Response message
- */
-const clearVotes = () => {
-    if(String(process.env.ADMIN) !== String(currentUser)) return responses.not_allowed
-
-    if(votes.length === 0) return responses.no_votes
-
-    if(findInState(state,7, currentUser)){
-        votes = []
-        state = removeInState(state,7,currentUser)
-        return responses.deleted_votes 
-     }else{
-         state.push({key: 7, user:currentUser})
-         return responses.confirm_delete_of_votes()
+    case Steps.VIEW_ID: {
+      const id = t;
+      const data = await callN8n('get', { id }, from, text);
+      const content = normalizeWebhookContent(data) || 'No content available';
+      resetUser(from);
+      return `${content}\n\n${responses.menu()}`;
     }
 
-}
-
-/**
- * Used to format response
- * @param {Array} res - Array of votes grouped by candidates id
- * @return {Object} Response message
- */
-
-const formatResult = (res) => {
-    let candidate = []
-    for(key in res){
-        candidate.push({
-            name: candidates.find(e => Number(e.id) === Number(key)).name,
-            percentage: Math.round((res[key].length / votes.length) * 100),
-            total: res[key].length
-        })
+    case Steps.SEARCH_QUERY: {
+      const query = t;
+      const data = await callN8n('search', { query }, from, text);
+      const content = normalizeWebhookContent(data) || 'Sin resultados.';
+      // tras búsqueda, dejamos a usuario poner un ID
+      userState.set(from, { step: Steps.VIEW_ID, data: {} });
+      return `${content}\n\n${responses.askIdToView()}`;
     }
-    console.log(candidate)
-    candidate.sort((a,b) => b.total - a.total )
-    return {
-        winner: candidate[0].total && candidate[1] && candidate[0].total === candidate[1].total ? responses.draw : `🌟 ${candidate[0].name} 🌟`,
-        candidate
+
+    case Steps.CREATE_TITLE:
+      st.data.title = t;
+      st.step = Steps.CREATE_DESC;
+      return responses.createDescription();
+
+    case Steps.CREATE_DESC:
+      st.data.description = t;
+      st.step = Steps.CREATE_TIME;
+      return responses.createCookingTime();
+
+    case Steps.CREATE_TIME:
+      st.data.cookingTime = t;
+      st.step = Steps.CREATE_ING;
+      return responses.createIngredients();
+
+    case Steps.CREATE_ING:
+      st.data.ingredients = parseList(t);
+      st.step = Steps.CREATE_INS;
+      return responses.createInstructions();
+
+    case Steps.CREATE_INS: {
+      st.data.instructions = parseSteps(text);
+      const recipe = {
+        title: st.data.title,
+        description: st.data.description,
+        cookingTime: st.data.cookingTime,
+        ingredients: st.data.ingredients,
+        instructions: st.data.instructions,
+      };
+      const data = await callN8n('create', { recipe }, from, text);
+      const content = normalizeWebhookContent(data) || 'Receta creada.';
+      resetUser(from);
+      return `${content}\n\n${responses.menu()}`;
     }
+
+    case Steps.EDIT_ID:
+      st.data.id = t;
+      st.step = Steps.EDIT_FIELD;
+      return responses.editAskField();
+
+    case Steps.EDIT_FIELD: {
+      const fieldMap = {
+        '1': { key: 'title', label: 'Título' },
+        '2': { key: 'description', label: 'Descripción' },
+        '3': { key: 'cookingTime', label: 'Tiempo' },
+        '4': { key: 'ingredients', label: 'Ingredientes' },
+        '5': { key: 'instructions', label: 'Pasos' },
+        '6': { key: 'image', label: 'Imagen' },
+      };
+      const chosen = fieldMap[t];
+      if (!chosen) return responses.editAskField();
+      st.data.field = chosen.key;
+      st.data.fieldLabel = chosen.label;
+      st.step = Steps.EDIT_VALUE;
+      return responses.editAskValue(chosen.label);
+    }
+
+    case Steps.EDIT_VALUE: {
+      const id = st.data.id;
+      const field = st.data.field;
+      let value = t;
+      if (field === 'ingredients') value = parseList(t);
+      if (field === 'instructions') value = parseSteps(text);
+      const patch = { [field]: value };
+      const data = await callN8n('update', { id, patch }, from, text);
+      const content = normalizeWebhookContent(data) || 'Receta actualizada.';
+      resetUser(from);
+      return `${content}\n\n${responses.menu()}`;
+    }
+
+    case Steps.DELETE_ID:
+      st.data.id = t;
+      st.step = Steps.DELETE_CONFIRM;
+      return responses.deleteConfirm(t);
+
+    case Steps.DELETE_CONFIRM: {
+      const id = st.data.id;
+      if (t !== '1') {
+        resetUser(from);
+        return responses.cancelled();
+      }
+      const data = await callN8n('delete', { id }, from, text);
+      const content = normalizeWebhookContent(data) || `Receta ${id} borrada.`;
+      resetUser(from);
+      return `${content}\n\n${responses.menu()}`;
+    }
+
+    default:
+      resetUser(from);
+      return responses.menu();
+  }
 }
 
-/**
- * Shows results of votes cast
- * @return {String} Response message
- */
-
-const showResult = () => {
-    if(votes.length === 0) return responses.no_votes
-    if(candidates.length === 0) return responses.no_candidate
-    
-    let result = groupBy(votes,'candidate');
-    result = formatResult(result)
-    return `
-    ---- General Statistics -----
-    Total Votes cast: ${votes.length}
-    Result breakdown:
-    \n
-    ${ responses.showResult(result)}
-
-
-    -----  Winner so far  ------
-    ${result.winner}
-    Time:    ${new Date()}
-`
-}
-
-//////////////// Vote Section Ends  /////////////////////////
-
-
-//////////////// Display Messages //////////////////////////
-
-/**
- * Shows default message
- * @return {String} Response message
- */
-
-const showDefaultMessage = () => {
-    return `
-    💥 Welcome to E-Voter 💥
-         --- All ---
-        1 - Vote
-        2 - See Candidates
-        3 - See results
-
-        --- Admin --- 
-        4 - Add Candidate
-        5 - Delete Candidate
-        6 - Clear Candidates
-        7 - Clear Votes
-        8 - Help
-    `
-}
-
-
-/**
- * Used to show help to users
- * @return {String} Response message
- */
-const showHelp = () => {
-    return `
-    💥 Welcome to E-Voter 💥
-         --- All ---
-        1 - Vote: Allows user to vote by entering candidate id
-        2 - See Candidates: See all participating candidate
-        3 - See results: See the breakdown of results
-
-        --- Admin --- 
-        4 - Add Candidate: Add more candidate, 
-                a comma sepearted list to add in bulk
-                e.g joshua,Gbenga,kdkd
-        5 - Delete Candidate: Delete a candidate and their votes
-
-        6 - Clear Candidates: Removes all candidates from the application
-        7 - Clear Votes: Removes all votes cast so far from the application
-        8 - Help: Shows this help message
-
-        The ball is in your court now ✌️
-    `
-}
-
-
-const footer = `
-
-  Created With ❤️ by Chibuike 🔥 (chibuikenwa.com)
-
-`
-
-/////////////// Display Messages Ends ///////////////////
-
-router.post('/', async function(req, res, next) {
+router.post('/', async function (req, res) {
     const twiml = new MessagingResponse();
-    const body = req.body.Body; // El mensaje de WhatsApp
-    const from = req.body.From; // Número del remitente (teléfono)
-    
-    try {
-        // Llama a la función que hace la solicitud al webhook
-        const webhookResponse = await sendEventToWebhook(from, body); // Captura la respuesta del webhook
-        
-        // Accede al campo 'content' dentro de 'messages' en la respuesta
-        const content = webhookResponse.messages?.[0]?.content || "No content available";
+  const body = req.body.Body || '';
+  const from = req.body.From || 'unknown';
 
-        console.log('Respuesta del webhook:', content); // Muestra el contenido recibido en el webhook
+  try {
+    getOrInitUser(from);
 
-        // Utiliza el 'content' de la respuesta para enviar un mensaje al usuario
-        twiml.message(`Evento procesado correctamente. Detalles: ${content}`);
+    // si llega vacío, devolvemos menú
+    const input = safeText(body);
+    const message = input.length === 0 ? responses.menu() : await handleStep(from, input);
+    twiml.message(message);
         return res.status(200).send(twiml.toString());
-
     } catch (error) {
-        // Importante: Twilio espera una respuesta rápida (TwiML). Si n8n falla o tarda, respondemos igual.
-        // eslint-disable-next-line no-console
-        console.error('Error procesando webhook n8n:', error?.message || error);
-        twiml.message('Recibido ✅ (no pude procesarlo ahora mismo). Inténtalo de nuevo en unos segundos.');
-        return res.status(200).send(twiml.toString());
-    }
+    // eslint-disable-next-line no-console
+    console.error('Error recipes bot:', error?.message || error);
+    twiml.message(responses.n8nError());
+    return res.status(200).send(twiml.toString());
+  }
 });
-
-
 
 module.exports = router;
