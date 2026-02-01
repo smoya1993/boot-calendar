@@ -1,5 +1,8 @@
 const responses = {
   menu: () => `
+Bienvenido al asistente de Cheffit.
+Por favor, indica alguna de las acciones escribiendo un número:
+
 🍳 Chef-Boot (Recetas)
 
 1 - Listar recetas
@@ -31,11 +34,18 @@ Tip: en ingredientes usa coma (,) y en pasos usa | (barra vertical) o saltos de 
   askIdToView: () => 'Escribe el ID de la receta que quieres ver (0 para volver al menú).',
   askQuery: () => 'Escribe el texto a buscar (0 para volver al menú).',
 
-  createTitle: () => 'Crear receta: dime el *título* (0 para cancelar).',
-  createDescription: () => 'Crear receta: dime una *descripción* corta (0 para cancelar).',
-  createCookingTime: () => 'Crear receta: tiempo de preparación (ej: 15 min) (0 para cancelar).',
-  createIngredients: () => 'Crear receta: ingredientes separados por coma. Ej: huevo, leche, sal (0 para cancelar).',
-  createInstructions: () => 'Crear receta: pasos separados por | o por líneas. Ej: mezclar | hornear (0 para cancelar).',
+  createBootInput: () => `
+Crear receta:
+Escríbeme TODO en un solo mensaje, por ejemplo:
+
+Nombre: Salsa barbacoa casera
+Ingredientes: tomate, miel, ajo, sal
+Pasos: mezclar | cocer 15 min | servir
+Extras: (opcional) URL imagen / notas / alérgenos
+
+0 - Cancelar
+`.trim(),
+  createBootConfirm: () => '¿La receta es correcta?\n0 - Correcta (crear)\n1 - Volver a introducirla',
 
   editAskId: () => 'Editar receta: escribe el ID (0 para cancelar).',
   editAskField: () => `¿Qué quieres editar?\n1 - Título\n2 - Descripción\n3 - Tiempo\n4 - Ingredientes\n5 - Pasos\n6 - Imagen\n0 - Cancelar`,

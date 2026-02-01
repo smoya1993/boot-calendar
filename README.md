@@ -3,7 +3,7 @@
   Chef-Boot (Recetas)
   <br>
 </h1>
-<h4 align="center">Bot de WhatsApp (Twilio) para crear, ver, editar, borrar y buscar recetas, delegando el CRUD a n8n.</h4>
+<h4 align="center">Bot de Telegram para crear, ver, editar, borrar y buscar recetas, delegando el CRUD a n8n.</h4>
 
 <p align="center">
   <a href="#key-features">Key Features</a> •
@@ -27,7 +27,7 @@
 
 ## How To Use
 
-Necesitas [Git](https://git-scm.com) y [Node.js](https://nodejs.org/en/download/) (v18+ recomendado) con npm. Además, necesitas Twilio (WhatsApp) y un workflow de n8n expuesto vía webhook (production).
+Necesitas [Git](https://git-scm.com) y [Node.js](https://nodejs.org/en/download/) (v18+ recomendado) con npm. Además, necesitas **Telegram** y un workflow de n8n expuesto vía webhook (production).
 
 ```bash
 git clone <tu-repo>
@@ -39,10 +39,12 @@ npm start
 ## Variables de entorno
 
 - `PORT`: puerto del server (default `4000`)
-- `N8N_WEBHOOK_URL`: webhook de n8n (production). Default: `http://127.0.0.1:5678/webhook/recipes`
+- `N8N_WEBHOOK_URL`: webhook de n8n (production). Default: `http://84.247.170.83:5678/webhook/add-recipe`
 - `N8N_TIMEOUT_MS`: timeout para n8n (default `4000`)
+- `TELEGRAM_BOT_TOKEN`: token del bot (BotFather), requerido si usas Telegram
+- `TELEGRAM_WEBHOOK_SECRET`: (opcional, recomendado) se valida contra el header `X-Telegram-Bot-Api-Secret-Token`
 
-## Menú del bot (WhatsApp)
+## Menú del bot
 
 - `1` Listar recetas
 - `2` Ver receta (ID)
@@ -53,6 +55,48 @@ npm start
 - `0` Cancelar / menú
 - `9` Ayuda
 
+## Telegram
+
+### Endpoint
+
+El backend expone un webhook para Telegram en:
+
+- `POST /vote/telegram`
+
+El estado conversacional se guarda por chat (internamente usa `from = telegram:<chatId>`).
+
+### Configurar webhook (producción o local con túnel)
+
+1) Crea tu bot con BotFather y guarda `TELEGRAM_BOT_TOKEN` en `.env`.
+
+2) (Opcional recomendado) Define `TELEGRAM_WEBHOOK_SECRET` en `.env`.
+
+3) Expón tu servicio por HTTPS (dominio o túnel) y configura el webhook:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+  -d "url=https://<TU_DOMINIO_O_TUNEL_HTTPS>/vote/telegram" \
+  -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
+```
+
+4) Abre el chat con tu bot y escribe `9` para ver ayuda o cualquier número del menú.
+
+### Probar en local (ngrok)
+
+1) Arranca el server:
+
+```bash
+npm start
+```
+
+2) Expón el puerto 4000:
+
+```bash
+ngrok http 4000
+```
+
+3) Copia la URL HTTPS que te da ngrok y úsala en `setWebhook` (paso anterior).
+
 ## Contrato con n8n (webhook único)
 
 El backend hace `POST` a `N8N_WEBHOOK_URL` con:
@@ -60,7 +104,7 @@ El backend hace `POST` a `N8N_WEBHOOK_URL` con:
 ```json
 {
   "ctx": {
-    "from": "whatsapp:+34111111111",
+    "from": "telegram:123456789",
     "body": "texto original",
     "action": "list|get|search|create|update|delete",
     "payload": {}
@@ -79,7 +123,7 @@ Ejemplos de `payload`:
 Respuesta recomendada de n8n (rápida, HTTP 200):
 
 ```json
-{ "messages": [ { "content": "Texto para WhatsApp" } ] }
+{ "messages": [ { "content": "Texto para Telegram" } ] }
 ```
 
 También se soportan respuestas tipo “receta” (objeto) o arrays de recetas: el backend las formatea a texto.
@@ -122,7 +166,7 @@ PM2 te imprimirá un comando `sudo ...` — ejecútalo.
 
 ### 5) (Recomendado) Nginx + HTTPS (webhooks)
 
-Si Twilio/Telegram van a llamar a tu API, necesitas una URL pública con HTTPS.
+Si Telegram va a llamar a tu API, necesitas una URL pública con HTTPS.
 
 Ejemplo de server block (ajusta dominio y SSL):
 
@@ -154,7 +198,7 @@ sudo certbot --nginx -d tu-dominio.com
 
 This application uses the following open source packages:
 
-- [Twilio](https://twilio.com/)
+- [Telegram Bot API](https://core.telegram.org/bots/api)
 - [Node.js](https://nodejs.org/)
 - [ExpressJs](https://expressjs.com/)
 - [n8n](https://n8n.io/)

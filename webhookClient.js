@@ -9,7 +9,7 @@ const axios = require('axios');
 async function callN8n(action, payload, from, body) {
   // Por defecto apuntamos al webhook "production" de recetas.
   // Si quieres otro n8n, define N8N_WEBHOOK_URL en el .env
-  const url = process.env.N8N_WEBHOOK_URL || 'http://127.0.0.1:5678/webhook/recipes';
+  const url = process.env.N8N_WEBHOOK_URL || 'http://84.247.170.83:5678/webhook/add-recipe';
 
   const response = await axios.post(
     url,
