@@ -8,7 +8,9 @@ services:
     image: boot-calendar:latest
     container_name: boot-calendar
     environment:
-      - PORT=${PORT:-4000}
+      # El proceso dentro del contenedor escucha SIEMPRE en 4000.
+      # (Si usas PORT para publicar en el host, evita el mismatch host:container)
+      - PORT=4000
       - NODE_ENV=${NODE_ENV:-production}
       - N8N_TIMEOUT_MS=${N8N_TIMEOUT_MS:-4000}
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
@@ -21,5 +23,11 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    networks:
+      - cicd
+
+networks:
+  cicd:
+    external: true
 
 
